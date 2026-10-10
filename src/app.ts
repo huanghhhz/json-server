@@ -128,23 +128,17 @@ export function createApp(db: Low<Data>, options: AppOptions = {}) {
 
   app.get('/', (_req, res) => res.send(eta.render('index.html', { data: db.data })))
 
-  app.get('/:name', (req, res, next) => {
-    const { name = '' } = req.params
+  app.get('/*', (req, res, next) => {
+    const path = req.url.split('?')[0].split('/').filter(Boolean)
     const { where, sort, page, perPage, embed } = parseListParams(req)
 
-    res.locals['data'] = service.find(name, {
+    res.locals['data'] = service.findByPath(path, {
       where,
       sort,
       page,
       perPage,
       embed,
     })
-    next?.()
-  })
-
-  app.get('/:name/:id', (req, res, next) => {
-    const { name = '', id = '' } = req.params
-    res.locals['data'] = service.findById(name, id, req.query)
     next?.()
   })
 
@@ -170,7 +164,9 @@ export function createApp(db: Low<Data>, options: AppOptions = {}) {
       res.status(404).json({ error: 'Not Found' })
     } else {
       if (req.method === 'POST') res.status(201)
-      res.json('_keys' in req.query ? keysOnly(data) : data)
+      const body = '_keys' in req.query ? keysOnly(data) : data
+      // tinyhttp sends strings raw; wrap so primitives are valid JSON
+      res.json(typeof body === 'string' ? JSON.stringify(body) : body)
     }
   })
 

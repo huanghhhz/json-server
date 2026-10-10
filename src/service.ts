@@ -16,6 +16,14 @@ export function isItem(obj: unknown): obj is Item {
 
 export type PaginatedItems = PaginationResult<Item>
 
+export type FindOptions = {
+  where: JsonObject
+  sort?: string
+  page?: number
+  perPage?: number
+  embed?: string | string[]
+}
+
 function ensureArray(arg: string | string[] = []): string[] {
   return Array.isArray(arg) ? arg : [arg]
 }
@@ -107,16 +115,7 @@ export class Service {
     return
   }
 
-  find(
-    name: string,
-    opts: {
-      where: JsonObject
-      sort?: string
-      page?: number
-      perPage?: number
-      embed?: string | string[]
-    },
-  ): Item[] | PaginatedItems | Item | undefined {
+  find(name: string, opts: FindOptions): Item[] | PaginatedItems | Item | undefined {
     const items = this.#get(name)
 
     if (!Array.isArray(items)) {
@@ -130,7 +129,62 @@ export class Service {
       results = results.map((item) => embed(this.#db, name, item, related))
     })
 
-    results = results.filter((item) => matchesWhere(item as JsonObject, opts.where))
+    return this.#filterSortPage(results, opts)
+  }
+
+  findByPath(path: string[], opts: FindOptions): unknown {
+    if (path.length === 0) {
+      return this.#db.data
+    }
+
+    const name = path[0]!
+    const top = this.#get(name)
+    if (top === undefined) {
+      return undefined
+    }
+
+    // Preserve top-level collection behavior (relations via _embed)
+    if (Array.isArray(top)) {
+      if (path.length === 1) {
+        return this.find(name, opts)
+      }
+      if (path.length === 2) {
+        return this.findById(name, path[1]!, { _embed: opts.embed })
+      }
+    }
+
+    const value = this.#resolve(path)
+    if (value === undefined) {
+      return undefined
+    }
+    if (Array.isArray(value)) {
+      return this.#filterSortPage(value as Item[], opts)
+    }
+    return value
+  }
+
+  #resolve(path: string[]): unknown {
+    let value: unknown = this.#db.data
+    for (const segment of path) {
+      if (Array.isArray(value)) {
+        value = value.find((item) => item['id'] === segment)
+      } else if (value !== null && typeof value === 'object') {
+        value = (value as Record<string, unknown>)[segment]
+      } else {
+        return undefined
+      }
+      if (value === undefined) {
+        return undefined
+      }
+    }
+    return value
+  }
+
+  #filterSortPage(
+    items: Item[],
+    opts: { where: JsonObject; sort?: string; page?: number; perPage?: number },
+  ): Item[] | PaginatedItems {
+    let results = items.filter((item) => matchesWhere(item as JsonObject, opts.where))
     if (opts.sort) {
       results = sortOn(results, opts.sort.split(','))
     }

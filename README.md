@@ -120,8 +120,14 @@ Loads as:
 
 Each file is served and written back individually — `POST`/`PUT`/`PATCH`/`DELETE` persist to the originating file, and files added/removed while running are picked up automatically.
 
+Nested paths are readable at any depth:
+
+```bash
+curl http://localhost:3000/nested/profile
+```
+
 > [!NOTE]
-> Only top-level keys get full CRUD. A nested directory (like `nested/` above) is exposed as a single object at `/nested`, not as its own routable resources.
+> Reads work at any depth, but CRUD (`POST`/`PUT`/`PATCH`/`DELETE`) is only available on top-level resources.
 
 Run `json-server --help` for a list of options
 

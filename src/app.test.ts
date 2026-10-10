@@ -156,6 +156,33 @@ await test('createApp', async (t) => {
     assert.deepEqual(data, ['f1'])
   })
 
+  await t.test('GET nested paths resolve through object tree', async () => {
+    db.data = {
+      posts: [{ id: '1', title: 'foo' }],
+      comments: [{ id: '1', postId: '1' }],
+      object: { f1: 'foo' },
+      nested: { DE: { sessions: { '2610101637': 'ok' } } },
+    }
+    const cases = [
+      { url: '/nested', expected: { DE: { sessions: { '2610101637': 'ok' } } } },
+      { url: '/nested/DE', expected: { sessions: { '2610101637': 'ok' } } },
+      { url: '/nested/DE/sessions', expected: { '2610101637': 'ok' } },
+      { url: '/nested/DE/sessions/2610101637', expected: 'ok' },
+    ]
+    for (const tc of cases) {
+      const response = await fetch(`http://localhost:${port}${tc.url}`)
+      assert.equal(response.status, 200)
+      assert.deepEqual(await response.json(), tc.expected)
+    }
+  })
+
+  await t.test('GET /posts/1/title returns nested item field', async () => {
+    db.data = { posts: [{ id: '1', title: 'foo' }], comments: [], object: { f1: 'foo' } }
+    const response = await fetch(`http://localhost:${port}/posts/1/title`)
+    assert.equal(response.status, 200)
+    assert.deepEqual(await response.json(), 'foo')
+  })
+
   await t.test('GET /posts?_where=... overrides query params', async () => {
     const where = encodeURIComponent(JSON.stringify({ title: { eq: 'foo' } }))
     const response = await fetch(
