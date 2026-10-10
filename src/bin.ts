@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { extname } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -12,6 +12,7 @@ import { DataFile, JSONFile } from "lowdb/node";
 import type { PackageJson } from "type-fest";
 
 import { fileURLToPath } from "node:url";
+import { DirAdapter } from "./adapters/dir-adapter.ts";
 import { NormalizedAdapter } from "./adapters/normalized-adapter.ts";
 import type { RawData } from "./adapters/normalized-adapter.ts";
 import { Observer } from "./adapters/observer.ts";
@@ -19,7 +20,7 @@ import { createApp } from "./app.ts";
 import type { Data } from "./service.ts";
 
 function help() {
-  console.log(`Usage: json-server [options] <file>
+  console.log(`Usage: json-server [options] <file|dir>
 
 Options:
   -p, --port <port>  Port (default: 3000)
@@ -115,24 +116,30 @@ function args(): {
 const { file, port, host, static: staticArr } = args();
 
 if (!existsSync(file)) {
-  console.log(chalk.red(`File ${file} not found`));
+  console.log(chalk.red(`File or directory ${file} not found`));
   process.exit(1);
 }
 
-// Handle empty string JSON file
-if (readFileSync(file, "utf-8").trim() === "") {
-  writeFileSync(file, "{}");
-}
+const isDirectory = statSync(file).isDirectory();
 
 // Set up database
 let adapter: Adapter<RawData>;
-if (extname(file) === ".json5") {
-  adapter = new DataFile<RawData>(file, {
-    parse: JSON5.parse,
-    stringify: JSON5.stringify,
-  });
+if (isDirectory) {
+  adapter = new DirAdapter(file);
 } else {
-  adapter = new JSONFile<RawData>(file);
+  // Handle empty string JSON file
+  if (readFileSync(file, "utf-8").trim() === "") {
+    writeFileSync(file, "{}");
+  }
+
+  if (extname(file) === ".json5") {
+    adapter = new DataFile<RawData>(file, {
+      parse: JSON5.parse,
+      stringify: JSON5.stringify,
+    });
+  } else {
+    adapter = new JSONFile<RawData>(file);
+  }
 }
 const observer = new Observer(new NormalizedAdapter(adapter));
 
@@ -209,7 +216,7 @@ if (process.env["NODE_ENV"] !== "production") {
     }
     hadReadError = false;
   };
-  watch(file).on("change", () => {
+  const reload = () => {
     // Do no reload if the file is being written to by the app
     if (!writing) {
       db.read().catch((e) => {
@@ -220,5 +227,13 @@ if (process.env["NODE_ENV"] !== "production") {
         console.log(e);
       });
     }
-  });
+  };
+
+  const watcher = watch(file, { ignoreInitial: true });
+  watcher.on("change", reload);
+  if (isDirectory) {
+    // Directory mode: also pick up files added/removed inside the tree
+    watcher.on("add", reload);
+    watcher.on("unlink", reload);
+  }
 }

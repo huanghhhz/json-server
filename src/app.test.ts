@@ -137,6 +137,25 @@ await test('createApp', async (t) => {
     assert.deepEqual(data, [{ id: '1', title: 'foo' }])
   })
 
+  await t.test('GET /posts?_keys returns only item keys', async () => {
+    db.data = {
+      posts: [{ id: '1', title: 'foo' }],
+      comments: [{ id: '1', postId: '1' }],
+      object: { f1: 'foo' },
+    }
+    const response = await fetch(`http://localhost:${port}/posts?_keys`)
+    assert.equal(response.status, 200)
+    const data = await response.json()
+    assert.deepEqual(data, [['id', 'title']])
+  })
+
+  await t.test('GET /object?_keys returns only object keys', async () => {
+    const response = await fetch(`http://localhost:${port}/object?_keys`)
+    assert.equal(response.status, 200)
+    const data = await response.json()
+    assert.deepEqual(data, ['f1'])
+  })
+
   await t.test('GET /posts?_where=... overrides query params', async () => {
     const where = encodeURIComponent(JSON.stringify({ title: { eq: 'foo' } }))
     const response = await fetch(

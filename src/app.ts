@@ -25,7 +25,15 @@ const eta = new Eta({
   cache: isProduction,
 })
 
-const RESERVED_QUERY_KEYS = new Set(['_sort', '_page', '_per_page', '_embed', '_where'])
+const RESERVED_QUERY_KEYS = new Set(['_sort', '_page', '_per_page', '_embed', '_where', '_keys'])
+
+// Return only the keys of objects/items, dropping nested values
+function keysOnly(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => (isItem(item) ? Object.keys(item) : item))
+  }
+  return isItem(value) ? Object.keys(value) : value
+}
 
 function parseListParams(req: any) {
   const queryString = req.url.split('?')[1] ?? ''
@@ -162,7 +170,7 @@ export function createApp(db: Low<Data>, options: AppOptions = {}) {
       res.status(404).json({ error: 'Not Found' })
     } else {
       if (req.method === 'POST') res.status(201)
-      res.json(data)
+      res.json('_keys' in req.query ? keysOnly(data) : data)
     }
   })
 

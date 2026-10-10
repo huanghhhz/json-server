@@ -2,6 +2,14 @@
 
 [![Node.js CI](https://github.com/typicode/json-server/actions/workflows/node.js.yml/badge.svg)](https://github.com/typicode/json-server/actions/workflows/node.js.yml)
 
+> [!NOTE]
+> **This is a fork of [json-server](https://github.com/typicode/json-server) with two additions:**
+>
+> 1. **Directory mode** — pass a directory instead of a single file; sub-directories become keys, `.json`/`.json5` files become nested data. See [Serve from a directory](#serve-from-a-directory).
+> 2. **`_keys` filter** — return only keys instead of full data. See [Keys only](#keys-only).
+>
+> Everything else behaves like upstream json-server v1 (beta).
+
 > [!IMPORTANT]
 > Viewing beta v1 documentation – usable but expect breaking changes. For stable version, see [here](https://github.com/typicode/json-server/tree/v0.17.4)
 
@@ -86,6 +94,35 @@ curl http://localhost:3000/posts/1
 }
 ```
 
+### Serve from a directory
+
+Instead of a single file, pass a directory. Sub-directories become keys and `.json`/`.json5` files become nested values:
+
+```text
+data/
+  posts.json
+  nested/
+    profile.json5
+```
+
+```bash
+npx json-server data
+```
+
+Loads as:
+
+```json
+{
+  "posts": [...],
+  "nested": { "profile": { ... } }
+}
+```
+
+Each file is served and written back individually — `POST`/`PUT`/`PATCH`/`DELETE` persist to the originating file, and files added/removed while running are picked up automatically.
+
+> [!NOTE]
+> Only top-level keys get full CRUD. A nested directory (like `nested/` above) is exposed as a single object at `/nested`, not as its own routable resources.
+
 Run `json-server --help` for a list of options
 
 ## Sponsors ✨
@@ -124,6 +161,7 @@ GET /posts?views:gt=100                  # Filter by condition
 GET /posts?_sort=-views                  # Sort by field (descending)
 GET /posts?_page=1&_per_page=10          # Pagination
 GET /posts?_embed=comments               # Include relations
+GET /posts?_keys                          # Keys only
 GET /posts?_where={"or":[...]}           # Complex queries
 ```
 
@@ -223,6 +261,18 @@ GET /posts?_page=1&_per_page=25
 GET /posts?_embed=comments
 GET /comments?_embed=post
 ```
+
+### Keys only
+
+Return only keys instead of full data — useful for large datasets:
+
+```http
+GET /posts?_keys
+GET /profile?_keys
+```
+
+- object resource → array of its keys
+- array resource → array of each item's keys
 
 ### Complex filter with `_where`
 
